@@ -1,0 +1,2401 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Meteo Interattiva con Live Wallpaper - Salvatore Passeggia 2026 -</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Live Wallpaper Canvas */
+        #liveWallpaper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Effetto vetro */
+        .glass-effect {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(2px);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Contenuto principale */
+        .container {
+            position: relative;
+            z-index: 10;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Buttons Style */
+        .search-container {
+            position: relative;
+            max-width: 400px;
+            margin: 0 15px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 45px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-input:focus {
+            outline: none;
+            background: white;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+
+        .search-icon:hover {
+            color: #333;
+        }
+
+        .theme-toggle {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .theme-toggle:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Stili per le informazioni meteo inline nel header - MODIFICATO */
+        .weather-info-inline {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 25px;
+            padding: 15px 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            flex: 1;
+            min-width: 500px;
+            max-width: 800px;
+            justify-content: space-between;
+        }
+
+        .city-name-inline {
+            font-size: 20px;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 400px;
+        }
+
+        .weather-desc-inline {
+            font-size: 16px;
+            opacity: 0.9;
+            white-space: nowrap;
+        }
+
+        .temperature-inline {
+            font-size: 28px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        /* Info orario locale */
+        .local-time-info {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        /* Evidenziazione per data diversa */
+        .prev-day { 
+            background-color: rgba(255, 229, 180, 0.3) !important;
+            border-left: 4px solid #ff9800 !important;
+        }
+        .next-day { 
+            background-color: rgba(200, 230, 201, 0.3) !important;
+            border-left: 4px solid #4caf50 !important;
+        }
+
+        /* Tema chiaro */
+        body:not(.dark-theme) {
+            background: #e0f7fa;
+            color: #01579b;
+        }
+
+        body:not(.dark-theme) .weather-info-inline {
+            color: #01579b;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            text-shadow: none;
+        }
+
+        body:not(.dark-theme) .city-name-inline,
+        body:not(.dark-theme) .weather-desc-inline,
+        body:not(.dark-theme) .temperature-inline {
+            color: #01579b;
+        }
+
+        body:not(.dark-theme) .prev-day { 
+            background-color: rgba(255, 229, 180, 0.6) !important;
+            border-left: 4px solid #ff9800 !important;
+        }
+        body:not(.dark-theme) .next-day { 
+            background-color: rgba(200, 230, 201, 0.6) !important;
+            border-left: 4px solid #4caf50 !important;
+        }
+
+        /* Previsioni 5 giorni in alto */
+        .daily-section {
+            margin-bottom: 40px;
+            order: -1;
+        }
+        
+        .daily-section h2 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 22px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        body:not(.dark-theme) .daily-section h2 {
+            color: #01579b;
+            text-shadow: none;
+        }
+
+        /* Previsioni */
+        .forecast-section {
+            margin-bottom: 40px;
+        }
+
+        .forecast-section h2 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        body:not(.dark-theme) .forecast-section h2 {
+            color: #01579b;
+            text-shadow: none;
+        }
+
+        .hourly-forecast,
+        .daily-forecast {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+
+        .forecast-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            color: white;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Evidenziazione per l'ora corrente */
+        .forecast-card.current-hour {
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid #ffd700;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+            transform: scale(1.05);
+        }
+
+        body:not(.dark-theme) .forecast-card.current-hour {
+            background: rgba(255, 215, 0, 0.3);
+            border: 2px solid #ff9800;
+            box-shadow: 0 0 15px rgba(255, 152, 0, 0.5);
+        }
+
+        body:not(.dark-theme) .forecast-card {
+            background: rgba(255, 255, 255, 0.9);
+            color: #01579b;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .forecast-card:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        body:not(.dark-theme) .forecast-card:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .forecast-time {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+
+        .forecast-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .forecast-icon svg {
+            width: 120px;
+            height: 120px;
+            filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.2));
+        }
+
+        .forecast-temp {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .forecast-desc {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        
+        /* Nuovi stili per umidità e vento nelle previsioni */
+        .forecast-details {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+        .forecast-humidity,
+        .forecast-wind {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .forecast-humidity-icon,
+        .forecast-wind-icon {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        /* Stili per l'icona del termometro e il nuovo layout della temperatura */
+        .thermometer-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 5px 0;
+        }
+
+        .thermometer-icon {
+            margin-right: 8px;
+            filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.2));
+        }
+
+        .temperature-range {
+            font-size: 16px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* Stili per le card orarie interattive */
+        .hourly-card {
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            min-height: 100px;
+            position: relative;
+        }
+
+        .hourly-card.compact {
+            padding: 12px;
+        }
+
+        .hourly-card.compact .time-temp-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .hourly-card.compact .forecast-icon {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 5px;
+        }
+
+        .hourly-card.compact .forecast-desc,
+        .hourly-card.compact .forecast-details {
+            display: none;
+        }
+
+        .hourly-card.expanded {
+            padding: 15px;
+            min-height: auto;
+        }
+
+        .hourly-card.expanded .time-temp-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .hourly-card.expanded .forecast-icon {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .hourly-card.expanded .forecast-desc {
+            margin-bottom: 10px;
+        }
+
+        .hourly-card.expanded .forecast-details {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Stili per l'ora in grassetto */
+        .forecast-time-bold {
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        /* Tema scuro - di default */
+        body {
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+
+        body .sky {
+            background: linear-gradient(180deg, #0d1b2a 0%, #1b263b 100%);
+            animation: skyGradientDark 8s ease-in-out infinite;
+        }
+
+        @keyframes skyGradientDark {
+            0%, 100% { background: linear-gradient(180deg, #0d1b2a 0%, #1b263b 100%); }
+            50% { background: linear-gradient(180deg, #1b263b 0%, #2d3748 100%); }
+        }
+
+        body .cloud {
+            background: rgba(45, 55, 72, 0.8);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        body .cloud::before,
+        body .cloud::after {
+            background: rgba(45, 55, 72, 0.8);
+        }
+
+        body .rain {
+            background: rgba(100, 149, 237, 0.7);
+            box-shadow: 0 0 3px rgba(100, 149, 237, 0.5);
+        }
+
+        body .snowflake {
+            background: linear-gradient(45deg, #e6f3ff, #b8d4f1);
+            box-shadow: 0 0 8px rgba(184, 212, 241, 0.6);
+            animation-duration: 2s;
+        }
+
+        body .content {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        body .search-input,
+        body .search-icon,
+        body .theme-toggle {
+            background: rgba(26, 32, 44, 0.9);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        body .search-input:focus,
+        body .search-icon:hover,
+        body .theme-toggle:hover {
+            background: rgba(45, 55, 72, 0.95);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        body .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        body .forecast-icon svg {
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+        }
+
+        /* Tema chiaro con sfondo cyan */
+        body:not(.dark-theme) .sky {
+            background: linear-gradient(180deg, #b2ebf2 0%, #e0f7fa 100%);
+            animation: skyGradient 8s ease-in-out infinite;
+        }
+
+        @keyframes skyGradient {
+            0%, 100% { background: linear-gradient(180deg, #b2ebf2 0%, #e0f7fa 100%); }
+            50% { background: linear-gradient(180deg, #80deea 0%, #b2ebf2 100%); }
+        }
+
+        body:not(.dark-theme) .cloud {
+            background: rgba(3, 169, 244, 0.8);
+            box-shadow: 0 4px 10px rgba(0, 137, 123, 0.3);
+        }
+
+        body:not(.dark-theme) .cloud::before,
+        body:not(.dark-theme) .cloud::after {
+            background: rgba(3, 169, 244, 0.8);
+        }
+
+        body:not(.dark-theme) .rain {
+            background: rgba(0, 137, 123, 0.8);
+            box-shadow: 0 0 5px rgba(0, 137, 123, 0.6);
+        }
+
+        body:not(.dark-theme) .snowflake {
+            background: linear-gradient(45deg, #e1f5fe, #b3e5fc);
+            box-shadow: 0 0 10px rgba(3, 169, 244, 0.8);
+            animation-duration: 3s;
+        }
+
+        body:not(.dark-theme) .content {
+            background: transparent;
+        }
+
+        body:not(.dark-theme) .search-input,
+        body:not(.dark-theme) .search-icon,
+        body:not(.dark-theme) .theme-toggle {
+            background: rgba(255, 255, 255, 0.9);
+            color: #01579b;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        body:not(.dark-theme) .search-input:focus,
+        body:not(.dark-theme) .search-icon:hover,
+        body:not(.dark-theme) .theme-toggle:hover {
+            background: white;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        body:not(.dark-theme) .search-input::placeholder {
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        body:not(.dark-theme) .forecast-icon svg {
+            filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.3));
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .daily-forecast {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            }
+            
+            /* Modifica specifica per mobile - struttura a 3 righe */
+            .daily-section .header-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+            
+            .daily-section .weather-info-full-width {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+            
+            .daily-section h2 {
+                width: 100%;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .content {
+                padding: 10px;
+            }
+
+            .daily-forecast,
+            .hourly-forecast {
+                grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            }
+
+            .forecast-section h2 {
+                font-size: 18px;
+            }
+            
+            .weather-info-inline {
+                padding: 10px 15px;
+                gap: 10px;
+                min-width: 300px;
+                max-width: 500px;
+            }
+            
+            .city-name-inline {
+                font-size: 16px;
+                max-width: 350px;
+            }
+            
+            .weather-desc-inline {
+                font-size: 14px;
+            }
+            
+            .temperature-inline {
+                font-size: 24px;
+            }
+        }
+
+        /* Animazioni di caricamento */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="liveWallpaper"></canvas>
+    <div class="glass-effect"></div>
+    
+    <div class="container">
+
+        <div class="forecast-section daily-section">
+
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <div class="search-container">
+                        <input type="text" id="cityInputInline" placeholder="Cerca una città..." class="search-input">
+                        <button id="searchBtnInline" class="search-icon">🔍</button>
+                    </div>
+                    <div class="header-controls" style="margin: 0;">
+                        <button id="themeToggleInline" class="theme-toggle" title="Cambia tema">☀️</button>
+                    </div>
+                    <div class="weather-info-inline">
+                        <div>
+                            <div id="cityNameInline" class="city-name-inline"></div>
+                            <div id="localTimeInfoInline" class="local-time-info"></div>
+                        </div>
+                        <span id="weatherDescInline" class="weather-desc-inline"></span>
+                        <span id="temperatureInline" class="temperature-inline"></span>
+                    </div>
+                </div>
+                
+                <h2 style="margin: 0;">__--__ Previsioni 7 Giorni __--__</h2>
+            </div>
+            
+            <div class="mobile-layout" style="display: none;">
+
+                <div class="header-top">
+                    <div class="search-container">
+                        <input type="text" id="cityInputInlineMobile" placeholder="Cerca una città..." class="search-input">
+                        <button id="searchBtnInlineMobile" class="search-icon">🔍</button>
+                    </div>
+                    <div class="header-controls">
+                        <button id="themeToggleInlineMobile" class="theme-toggle" title="Cambia tema">☀️</button>
+                    </div>
+                </div>
+                
+                <div class="weather-info-full-width">
+                    <div class="weather-info-inline">
+                        <div>
+                            <div id="cityNameInlineMobile" class="city-name-inline"></div>
+                            <div id="localTimeInfoInlineMobile" class="local-time-info"></div>
+                        </div>
+                        <span id="weatherDescInlineMobile" class="weather-desc-inline"></span>
+                        <span id="temperatureInlineMobile" class="temperature-inline"></span>
+                    </div>
+                </div>
+                
+                <h2>__--__ Previsioni 7 Giorni __--__</h2>
+            </div>
+            
+            <div id="dailyForecast" class="daily-forecast"></div>
+        </div>
+
+        <div class="forecast-section hourly-section">
+            <h2 id="hourlyTitle">Previsioni Orarie</h2>
+            <div id="hourlyForecast" class="hourly-forecast"></div>
+        </div>
+    </div>
+
+    <script>
+
+        const canvas = document.getElementById('liveWallpaper');
+        const ctx = canvas.getContext('2d');
+        let animationId;
+        let currentWeatherEffect = null;
+        let mouseX = 0;
+        let mouseY = 0;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        class RainEffect {
+            constructor() {
+                this.drops = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 200; i++) {
+                    this.drops.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        length: Math.random() * 20 + 10,
+                        speed: Math.random() * 10 + 15,
+                        opacity: Math.random() * 0.5 + 0.5,
+                        width: Math.random() * 2 + 1
+                    });
+                }
+            }
+
+            update() {
+                this.drops.forEach(drop => {
+                    drop.y += drop.speed;
+                    
+                    if (drop.y > canvas.height) {
+                        drop.y = -drop.length;
+                        drop.x = Math.random() * canvas.width;
+                    }
+                    
+                    const dx = mouseX - drop.x;
+                    const dy = mouseY - drop.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 50) {
+                        drop.x += dx * 0.02;
+                        drop.y += dy * 0.02;
+                    }
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                if (document.body.classList.contains('dark-theme')) {
+                    gradient.addColorStop(0, 'rgba(13, 27, 42, 0.3)');
+                    gradient.addColorStop(1, 'rgba(27, 38, 59, 0.1)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(178, 235, 242, 0.3)');
+                    gradient.addColorStop(1, 'rgba(224, 247, 250, 0.05)');
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                this.drops.forEach(drop => {
+                    ctx.beginPath();
+                    ctx.moveTo(drop.x, drop.y);
+                    ctx.lineTo(drop.x, drop.y + drop.length);
+                    
+                    if (document.body.classList.contains('dark-theme')) {
+                        ctx.strokeStyle = `rgba(174, 194, 224, ${drop.opacity})`;
+                    } else {
+                        ctx.strokeStyle = `rgba(0, 137, 123, ${drop.opacity})`;
+                    }
+                    
+                    ctx.lineWidth = drop.width;
+                    ctx.stroke();
+                    
+                    if (drop.y > canvas.height - 50) {
+                        ctx.beginPath();
+                        ctx.arc(drop.x, canvas.height - 10, 3, 0, Math.PI * 2);
+                        
+                        if (document.body.classList.contains('dark-theme')) {
+                            ctx.fillStyle = `rgba(174, 194, 224, ${drop.opacity * 0.8})`;
+                        } else {
+                            ctx.fillStyle = `rgba(0, 137, 123, ${drop.opacity * 0.8})`;
+                        }
+                        
+                        ctx.fill();
+                    }
+                });
+            }
+        }
+
+        class ThunderEffect extends RainEffect {
+            constructor() {
+                super();
+                this.lightning = [];
+            }
+
+            init() {
+                super.init();
+                for (let i = 0; i < 5; i++) {
+                    this.lightning.push({
+                        x: Math.random() * canvas.width,
+                        active: false,
+                        timer: Math.random() * 300
+                    });
+                }
+            }
+
+            update() {
+                super.update();
+                
+                this.lightning.forEach(bolt => {
+                    bolt.timer--;
+                    if (bolt.timer <= 0) {
+                        bolt.active = true;
+                        bolt.timer = Math.random() * 300 + 200;
+                    } else if (bolt.active && bolt.timer > 180) {
+                        bolt.active = false;
+                    }
+                });
+            }
+
+            draw() {
+                super.draw();
+                
+                this.lightning.forEach(bolt => {
+                    if (bolt.active) {
+                        ctx.beginPath();
+                        ctx.moveTo(bolt.x, 0);
+                        
+                        let currentX = bolt.x;
+                        let currentY = 0;
+                        
+                        while (currentY < canvas.height) {
+                            currentY += Math.random() * 50 + 20;
+                            currentX += (Math.random() - 0.5) * 50;
+                            ctx.lineTo(currentX, currentY);
+                        }
+                        
+                        ctx.strokeStyle = 'rgba(255, 255, 200, 0.8)';
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                        
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }
+                });
+            }
+        }
+
+        class SnowEffect {
+            constructor() {
+                this.snowflakes = [];
+                this.penguins = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 100; i++) {
+                    this.snowflakes.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        size: Math.random() * 4 + 2,
+                        speed: Math.random() * 2 + 1,
+                        opacity: Math.random() * 0.6 + 0.4,
+                        swing: Math.random() * 2 - 1,
+                        swingSpeed: Math.random() * 0.02 + 0.01
+                    });
+                }
+                
+                for (let i = 0; i < 5; i++) {
+                    this.penguins.push({
+                        x: Math.random() * canvas.width,
+                        y: canvas.height - 50,
+                        size: Math.random() * 15 + 20,
+                        speed: Math.random() * 1 + 0.5,
+                        direction: Math.random() > 0.5 ? 1 : -1,
+                        color: this.getRandomColor(),
+                        waddlePhase: Math.random() * Math.PI * 2,
+                        waddleSpeed: Math.random() * 0.1 + 0.05
+                    });
+                }
+            }
+
+            getRandomColor() {
+                const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                this.snowflakes.forEach(flake => {
+                    flake.y += flake.speed;
+                    flake.x += Math.sin(flake.swing) * 0.5;
+                    flake.swing += flake.swingSpeed;
+                    
+                    if (flake.y > canvas.height) {
+                        flake.y = -flake.size;
+                        flake.x = Math.random() * canvas.width;
+                    }
+                    
+                    const dx = mouseX - flake.x;
+                    const dy = mouseY - flake.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 30) {
+                        flake.x -= dx * 0.01;
+                        flake.y -= dy * 0.01;
+                    }
+                });
+                
+                this.penguins.forEach(penguin => {
+                    penguin.x += penguin.speed * penguin.direction;
+                    penguin.waddlePhase += penguin.waddleSpeed;
+                    
+                    if (penguin.direction > 0 && penguin.x > canvas.width + 50) {
+                        penguin.x = -50;
+                    } else if (penguin.direction < 0 && penguin.x < -50) {
+                        penguin.x = canvas.width + 50;
+                    }
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                if (document.body.classList.contains('dark-theme')) {
+                    gradient.addColorStop(0, 'rgba(13, 27, 42, 0.3)');
+                    gradient.addColorStop(1, 'rgba(27, 38, 59, 0.1)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(178, 235, 242, 0.2)');
+                    gradient.addColorStop(1, 'rgba(224, 247, 250, 0.05)');
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                this.snowflakes.forEach(flake => {
+                    ctx.beginPath();
+                    ctx.arc(flake.x, flake.y, flake.size, 0, Math.PI * 2);
+                    
+                    if (document.body.classList.contains('dark-theme')) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${flake.opacity})`;
+                    } else {
+                        ctx.fillStyle = `rgba(3, 169, 244, ${flake.opacity * 0.9})`;
+                    }
+                    
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = document.body.classList.contains('dark-theme') ? 
+                        `rgba(255, 255, 255, ${flake.opacity * 0.5})` : 
+                        `rgba(0, 137, 123, ${flake.opacity * 0.9})`;
+                    ctx.lineWidth = 1;
+                    
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (Math.PI / 3) * i;
+                        ctx.beginPath();
+                        ctx.moveTo(flake.x, flake.y);
+                        ctx.lineTo(
+                            flake.x + Math.cos(angle) * flake.size * 2,
+                            flake.y + Math.sin(angle) * flake.size * 2
+                        );
+                        ctx.stroke();
+                    }
+                });
+                
+                this.penguins.forEach(penguin => {
+                    const wobble = Math.sin(penguin.waddlePhase) * 5;
+                    
+                    ctx.fillStyle = penguin.color;
+                    ctx.beginPath();
+                    ctx.ellipse(penguin.x, penguin.y + wobble, penguin.size * 0.6, penguin.size, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.ellipse(penguin.x, penguin.y + wobble, penguin.size * 0.4, penguin.size * 0.7, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#FFA500';
+                    ctx.beginPath();
+                    ctx.moveTo(penguin.x + penguin.size * 0.6, penguin.y + wobble);
+                    ctx.lineTo(penguin.x + penguin.size * 0.8, penguin.y + wobble);
+                    ctx.lineTo(penguin.x + penguin.size * 0.6, penguin.y + wobble + 5);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.fillStyle = 'black';
+                    ctx.beginPath();
+                    ctx.arc(penguin.x + penguin.size * 0.3, penguin.y + wobble - penguin.size * 0.2, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.arc(penguin.x + penguin.size * 0.3, penguin.y + wobble - penguin.size * 0.2, 1, 0, Math.PI * 2);
+                    ctx.fillStyle = 'white';
+                    ctx.fill();
+                });
+            }
+        }
+
+        class SunnyEffect {
+            constructor() {
+                this.sun = {
+                    x: canvas.width * 0.8,
+                    y: canvas.height * 0.2,
+                    radius: 80,
+                    rays: []
+                };
+                this.clouds = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 12; i++) {
+                    this.sun.rays.push({
+                        angle: (Math.PI * 2 / 12) * i,
+                        length: 0,
+                        targetLength: 120
+                    });
+                }
+                
+                for (let i = 0; i < 3; i++) {
+                    this.clouds.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height * 0.4,
+                        width: Math.random() * 100 + 80,
+                        height: Math.random() * 40 + 30,
+                        speed: Math.random() * 0.5 + 0.2,
+                        opacity: Math.random() * 0.3 + 0.1
+                    });
+                }
+            }
+
+            update() {
+                this.sun.rays.forEach(ray => {
+                    if (ray.length < ray.targetLength) {
+                        ray.length += 2;
+                    }
+                });
+                
+                this.clouds.forEach(cloud => {
+                    cloud.x += cloud.speed;
+                    if (cloud.x > canvas.width + cloud.width) {
+                        cloud.x = -cloud.width;
+                    }
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                if (document.body.classList.contains('dark-theme')) {
+                    gradient.addColorStop(0, 'rgba(13, 27, 42, 0.3)');
+                    gradient.addColorStop(1, 'rgba(27, 38, 59, 0.1)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(178, 235, 242, 0.3)');
+                    gradient.addColorStop(1, 'rgba(224, 247, 250, 0.1)');
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                const sunGradient = ctx.createRadialGradient(
+                    this.sun.x, this.sun.y, 0,
+                    this.sun.x, this.sun.y, this.sun.radius
+                );
+                
+                if (document.body.classList.contains('dark-theme')) {
+                    sunGradient.addColorStop(0, 'rgba(255, 255, 200, 0.8)');
+                    sunGradient.addColorStop(1, 'rgba(255, 200, 100, 0.3)');
+                } else {
+                    sunGradient.addColorStop(0, 'rgba(255, 235, 59, 0.9)');
+                    sunGradient.addColorStop(1, 'rgba(255, 193, 7, 0.4)');
+                }
+                
+                ctx.beginPath();
+                ctx.arc(this.sun.x, this.sun.y, this.sun.radius, 0, Math.PI * 2);
+                ctx.fillStyle = sunGradient;
+                ctx.fill();
+                
+                this.sun.rays.forEach(ray => {
+                    ctx.beginPath();
+                    ctx.moveTo(
+                        this.sun.x + Math.cos(ray.angle) * this.sun.radius,
+                        this.sun.y + Math.sin(ray.angle) * this.sun.radius
+                    );
+                    ctx.lineTo(
+                        this.sun.x + Math.cos(ray.angle) * (this.sun.radius + ray.length),
+                        this.sun.y + Math.sin(ray.angle) * (this.sun.radius + ray.length)
+                    );
+                    
+                    if (document.body.classList.contains('dark-theme')) {
+                        ctx.strokeStyle = 'rgba(255, 255, 200, 0.3)';
+                    } else {
+                        ctx.strokeStyle = 'rgba(255, 235, 59, 0.4)';
+                    }
+                    
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                });
+                
+                this.clouds.forEach(cloud => {
+                    const cloudOpacity = document.body.classList.contains('dark-theme') ? 
+                        cloud.opacity : cloud.opacity * 0.9;
+                    
+                    if (document.body.classList.contains('dark-theme')) {
+                        ctx.fillStyle = `rgba(45, 55, 72, ${cloudOpacity})`;
+                    } else {
+                        ctx.fillStyle = `rgba(3, 169, 244, ${cloudOpacity})`;
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.arc(cloud.x, cloud.y, cloud.height / 2, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width * 0.25, cloud.y - cloud.height * 0.1, cloud.height * 0.6, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width * 0.5, cloud.y, cloud.height * 0.7, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width * 0.75, cloud.y - cloud.height * 0.1, cloud.height * 0.5, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width, cloud.y, cloud.height / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+        }
+
+        class CloudyEffect {
+            constructor() {
+                this.clouds = [];
+                this.birds = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 8; i++) {
+                    this.clouds.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        width: Math.random() * 150 + 100,
+                        height: Math.random() * 60 + 40,
+                        speed: Math.random() * 0.3 + 0.1,
+                        opacity: Math.random() * 0.4 + 0.3
+                    });
+                }
+                
+                for (let i = 0; i < 6; i++) {
+                    this.birds.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height * 0.6,
+                        size: Math.random() * 15 + 10,
+                        speed: Math.random() * 2 + 1,
+                        wingPhase: Math.random() * Math.PI * 2,
+                        wingSpeed: Math.random() * 0.1 + 0.05,
+                        direction: Math.random() > 0.5 ? 1 : -1
+                    });
+                }
+            }
+
+            update() {
+                this.clouds.forEach(cloud => {
+                    cloud.x += cloud.speed;
+                    if (cloud.x > canvas.width + cloud.width) {
+                        cloud.x = -cloud.width;
+                        cloud.y = Math.random() * canvas.height;
+                    }
+                });
+                
+                this.birds.forEach(bird => {
+                    bird.x += bird.speed * bird.direction;
+                    bird.wingPhase += bird.wingSpeed;
+                    
+                    if (bird.direction > 0 && bird.x > canvas.width + 50) {
+                        bird.x = -50;
+                        bird.y = Math.random() * canvas.height * 0.6;
+                    } else if (bird.direction < 0 && bird.x < -50) {
+                        bird.x = canvas.width + 50;
+                        bird.y = Math.random() * canvas.height * 0.6;
+                    }
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                
+                if (document.body.classList.contains('dark-theme')) {
+                    gradient.addColorStop(0, 'rgba(150, 150, 150, 0.3)');
+                    gradient.addColorStop(1, 'rgba(100, 100, 100, 0.1)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(178, 235, 242, 0.3)');
+                    gradient.addColorStop(1, 'rgba(224, 247, 250, 0.1)');
+                }
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                this.clouds.forEach(cloud => {
+                    const cloudOpacity = document.body.classList.contains('dark-theme') ? 
+                        cloud.opacity : cloud.opacity * 0.9;
+                    
+                    if (document.body.classList.contains('dark-theme')) {
+                        ctx.fillStyle = `rgba(45, 55, 72, ${cloudOpacity})`;
+                    } else {
+                        ctx.fillStyle = `rgba(3, 169, 244, ${cloudOpacity})`;
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.arc(cloud.x, cloud.y, cloud.height / 2, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width * 0.25, cloud.y - cloud.height * 0.1, cloud.height * 0.6, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width * 0.5, cloud.y, cloud.height * 0.7, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width * 0.75, cloud.y - cloud.height * 0.1, cloud.height * 0.5, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width, cloud.y, cloud.height / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                
+                this.birds.forEach(bird => {
+                    const wingOffset = Math.sin(bird.wingPhase) * 5;
+                    
+                    if (document.body.classList.contains('dark-theme')) {
+                        ctx.fillStyle = '#333';
+                        ctx.strokeStyle = '#333';
+                    } else {
+                        ctx.fillStyle = '#01579b';
+                        ctx.strokeStyle = '#01579b';
+                    }
+                    
+                    ctx.lineWidth = 2;
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(bird.x, bird.y, bird.size * 0.6, bird.size * 0.3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(bird.x - bird.size * 0.3, bird.y);
+                    ctx.quadraticCurveTo(
+                        bird.x - bird.size * 0.8, 
+                        bird.y + wingOffset, 
+                        bird.x - bird.size * 0.6, 
+                        bird.y + bird.size * 0.4
+                    );
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(bird.x + bird.size * 0.3, bird.y);
+                    ctx.quadraticCurveTo(
+                        bird.x + bird.size * 0.8, 
+                        bird.y + wingOffset, 
+                        bird.x + bird.size * 0.6, 
+                        bird.y + bird.size * 0.4
+                    );
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(bird.x + bird.size * 0.6 * bird.direction, bird.y);
+                    ctx.lineTo(
+                        bird.x + bird.size * 0.8 * bird.direction, 
+                        bird.y
+                    );
+                    ctx.stroke();
+                });
+            }
+        }
+
+        class WindEffect {
+            constructor() {
+                this.kites = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 8; i++) {
+                    this.kites.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height * 0.7,
+                        size: Math.random() * 30 + 40,
+                        speed: Math.random() * 3 + 2,
+                        direction: Math.random() > 0.5 ? 1 : -1,
+                        color: this.getRandomColor(),
+                        tailLength: Math.random() * 50 + 30,
+                        swayPhase: Math.random() * Math.PI * 2,
+                        swaySpeed: Math.random() * 0.05 + 0.02
+                    });
+                }
+            }
+
+            getRandomColor() {
+                const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                this.kites.forEach(kite => {
+                    kite.x += kite.speed * kite.direction;
+                    kite.swayPhase += kite.swaySpeed;
+                    
+                    kite.y += Math.sin(kite.swayPhase) * 0.5;
+                    
+                    if (kite.direction > 0 && kite.x > canvas.width + 50) {
+                        kite.x = -50;
+                        kite.y = Math.random() * canvas.height * 0.7;
+                    } else if (kite.direction < 0 && kite.x < -50) {
+                        kite.x = canvas.width + 50;
+                        kite.y = Math.random() * canvas.height * 0.7;
+                    }
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                if (document.body.classList.contains('dark-theme')) {
+                    gradient.addColorStop(0, 'rgba(13, 27, 42, 0.3)');
+                    gradient.addColorStop(1, 'rgba(27, 38, 59, 0.1)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(178, 235, 242, 0.2)');
+                    gradient.addColorStop(1, 'rgba(224, 247, 250, 0.05)');
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.strokeStyle = document.body.classList.contains('dark-theme') ? 
+                    'rgba(255, 255, 255, 0.1)' : 'rgba(0, 137, 123, 0.2)';
+                ctx.lineWidth = 1;
+                
+                for (let i = 0; i < 10; i++) {
+                    ctx.beginPath();
+                    const y = (i + 1) * (canvas.height / 11);
+                    ctx.moveTo(0, y);
+                    
+                    for (let x = 0; x < canvas.width; x += 20) {
+                        ctx.lineTo(x, y + Math.sin(x * 0.02 + Date.now() * 0.001) * 5);
+                    }
+                    
+                    ctx.stroke();
+                }
+                
+                this.kites.forEach(kite => {
+                    const sway = Math.sin(kite.swayPhase) * 10;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(kite.x, kite.y + kite.size * 0.5);
+                    
+                    for (let i = 0; i < 5; i++) {
+                        const tailX = kite.x + (i * kite.tailLength / 5) * kite.direction;
+                        const tailY = kite.y + kite.size * 0.5 + (i * 10) + sway + Math.sin(Date.now() * 0.002 + i) * 5;
+                        ctx.lineTo(tailX, tailY);
+                    }
+                    
+                    ctx.strokeStyle = kite.color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = kite.color;
+                    ctx.beginPath();
+                    ctx.moveTo(kite.x, kite.y);
+                    ctx.lineTo(kite.x + kite.size * 0.5 * kite.direction, kite.y + kite.size * 0.5);
+                    ctx.lineTo(kite.x, kite.y + kite.size);
+                    ctx.lineTo(kite.x - kite.size * 0.5 * kite.direction, kite.y + kite.size * 0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(kite.x, kite.y);
+                    ctx.lineTo(kite.x, kite.y + kite.size);
+                    ctx.moveTo(kite.x - kite.size * 0.5 * kite.direction, kite.y + kite.size * 0.5);
+                    ctx.lineTo(kite.x + kite.size * 0.5 * kite.direction, kite.y + kite.size * 0.5);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.arc(kite.x, kite.y + kite.size * 0.3, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+        }
+
+        class FogEffect {
+            constructor() {
+                this.fogLayers = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 5; i++) {
+                    this.fogLayers.push({
+                        x: 0,
+                        y: i * (canvas.height / 5),
+                        width: canvas.width * 2,
+                        height: canvas.height / 5,
+                        speed: Math.random() * 0.5 + 0.1,
+                        opacity: Math.random() * 0.2 + 0.1
+                    });
+                }
+            }
+
+            update() {
+                this.fogLayers.forEach(layer => {
+                    layer.x += layer.speed;
+                    if (layer.x > canvas.width) {
+                        layer.x = -canvas.width;
+                    }
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                if (document.body.classList.contains('dark-theme')) {
+                    gradient.addColorStop(0, 'rgba(13, 27, 42, 0.3)');
+                    gradient.addColorStop(1, 'rgba(27, 38, 59, 0.1)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(178, 235, 242, 0.2)');
+                    gradient.addColorStop(1, 'rgba(224, 247, 250, 0.05)');
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                this.fogLayers.forEach(layer => {
+                    const fogOpacity = document.body.classList.contains('dark-theme') ? 
+                        layer.opacity * 0.8 : layer.opacity * 1.2;
+                    
+                    const gradient = ctx.createLinearGradient(
+                        layer.x, layer.y,
+                        layer.x + layer.width, layer.y + layer.height
+                    );
+                    gradient.addColorStop(0, `rgba(178, 235, 242, 0)`);
+                    gradient.addColorStop(0.5, `rgba(178, 235, 242, ${fogOpacity})`);
+                    gradient.addColorStop(1, `rgba(178, 235, 242, 0)`);
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(layer.x, layer.y, layer.width, layer.height);
+                });
+            }
+        }
+
+        class BeautifulWeatherEffect {
+            constructor() {
+                this.butterflies = [];
+                this.init();
+            }
+
+            init() {
+                for (let i = 0; i < 8; i++) {
+                    this.butterflies.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height * 0.7,
+                        size: Math.random() * 12 + 8,
+                        speed: Math.random() * 1 + 0.5,
+                        wingPhase: Math.random() * Math.PI * 2,
+                        wingSpeed: Math.random() * 0.15 + 0.1,
+                        color: this.getRandomColor(),
+                        targetX: Math.random() * canvas.width,
+                        targetY: Math.random() * canvas.height * 0.7
+                    });
+                }
+            }
+
+            getRandomColor() {
+                const colors = [
+                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', 
+                    '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+                ];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                this.butterflies.forEach(butterfly => {
+                    butterfly.wingPhase += butterfly.wingSpeed;
+                    
+                    const dx = butterfly.targetX - butterfly.x;
+                    const dy = butterfly.targetY - butterfly.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance > 5) {
+                        butterfly.x += (dx / distance) * butterfly.speed;
+                        butterfly.y += (dy / distance) * butterfly.speed;
+                    } else {
+                        butterfly.targetX = Math.random() * canvas.width;
+                        butterfly.targetY = Math.random() * canvas.height * 0.7;
+                    }
+                    
+                    butterfly.y += Math.sin(butterfly.wingPhase * 0.3) * 0.5;
+                    butterfly.x += Math.cos(butterfly.wingPhase * 0.2) * 0.3;
+                });
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                if (document.body.classList.contains('dark-theme')) {
+                    gradient.addColorStop(0, 'rgba(13, 27, 42, 0.3)');
+                    gradient.addColorStop(1, 'rgba(27, 38, 59, 0.1)');
+                } else {
+                    gradient.addColorStop(0, 'rgba(178, 235, 242, 0.3)');
+                    gradient.addColorStop(1, 'rgba(224, 247, 250, 0.1)');
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                this.butterflies.forEach(butterfly => {
+                    const wingAngle = Math.sin(butterfly.wingPhase) * 0.5;
+                    const wingScale = 0.8 + Math.sin(butterfly.wingPhase) * 0.2;
+                    
+                    ctx.fillStyle = butterfly.color;
+                    ctx.strokeStyle = butterfly.color;
+                    ctx.lineWidth = 1;
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(butterfly.x, butterfly.y, butterfly.size * 0.2, butterfly.size * 0.4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.save();
+                    ctx.translate(butterfly.x, butterfly.y);
+                    
+                    ctx.save();
+                    ctx.rotate(-wingAngle);
+                    ctx.scale(wingScale, 1);
+                    ctx.beginPath();
+                    ctx.ellipse(-butterfly.size * 0.3, 0, butterfly.size * 0.4, butterfly.size * 0.6, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                    
+                    ctx.save();
+                    ctx.rotate(wingAngle);
+                    ctx.scale(wingScale, 1);
+                    ctx.beginPath();
+                    ctx.ellipse(butterfly.size * 0.3, 0, butterfly.size * 0.4, butterfly.size * 0.6, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                    
+                    ctx.restore();
+                    
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    ctx.beginPath();
+                    ctx.arc(butterfly.x - butterfly.size * 0.2, butterfly.y - butterfly.size * 0.2, butterfly.size * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(butterfly.x + butterfly.size * 0.2, butterfly.y - butterfly.size * 0.2, butterfly.size * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+        }
+
+        function startWeatherEffect(weatherCode) {
+            if (currentWeatherEffect) {
+                cancelAnimationFrame(animationId);
+            }
+            
+            if (weatherCode === 0 || weatherCode === 1 || weatherCode === 2) {
+                currentWeatherEffect = new BeautifulWeatherEffect();
+            } else if (weatherCode === 3) {
+                currentWeatherEffect = new CloudyEffect();
+            } else if (weatherCode === 45 || weatherCode === 48) {
+                currentWeatherEffect = new FogEffect();
+            } else if (weatherCode >= 51 && weatherCode <= 65) {
+                if (weatherCode === 65) {
+                    currentWeatherEffect = new ThunderEffect();
+                } else {
+                    currentWeatherEffect = new RainEffect();
+                }
+            } else if (weatherCode >= 80 && weatherCode <= 82) {
+                if (weatherCode === 82) {
+                    currentWeatherEffect = new ThunderEffect();
+                } else {
+                    currentWeatherEffect = new RainEffect();
+                }
+            } else if (weatherCode >= 95 && weatherCode <= 97) {
+                currentWeatherEffect = new ThunderEffect();
+            } else if (weatherCode >= 71 && weatherCode <= 86) {
+                currentWeatherEffect = new SnowEffect();
+            } else if (weatherCode >= 20 && weatherCode <= 29) {
+                currentWeatherEffect = new WindEffect();
+            } else {
+                currentWeatherEffect = new CloudyEffect();
+            }
+            
+            animate();
+        }
+
+        function animate() {
+            if (currentWeatherEffect) {
+                currentWeatherEffect.update();
+                currentWeatherEffect.draw();
+                animationId = requestAnimationFrame(animate);
+            }
+        }
+
+        const API_BASE = 'https://geocoding-api.open-meteo.com/v1';
+        const WEATHER_API = 'https://api.open-meteo.com/v1';
+        
+        const cityInputInline = document.getElementById('cityInputInline');
+        const cityInputInlineMobile = document.getElementById('cityInputInlineMobile');
+        const searchBtnInline = document.getElementById('searchBtnInline');
+        const searchBtnInlineMobile = document.getElementById('searchBtnInlineMobile');
+        const themeToggleInline = document.getElementById('themeToggleInline');
+        const themeToggleInlineMobile = document.getElementById('themeToggleInlineMobile');
+
+        const hourlyForecast = document.getElementById('hourlyForecast');
+        const dailyForecast = document.getElementById('dailyForecast');
+
+        let currentWeatherData = null;
+        let currentTimezone = null;
+        let currentLocalHour = null;
+        let timezoneInterval = null;
+
+        const weatherIcons = {
+            0: '☀️',      // Clear sky
+            1: '⛅',      // Mainly clear
+            2: '⛅',      // Partly cloudy
+            3: '☁️',      // Overcast
+            45: '🌫️',     // Foggy
+            48: '🌫️',     // Depositing rime fog
+            51: '🌧️',     // Light drizzle
+            53: '🌧️',     // Moderate drizzle
+            55: '🌧️',     // Dense drizzle
+            61: '🌧️',     // Slight rain
+            63: '🌧️',     // Moderate rain
+            65: '⛈️',     // Heavy rain
+            71: '❄️',     // Slight snow
+            73: '❄️',     // Moderate snow
+            75: '❄️',     // Heavy snow
+            77: '❄️',     // Snow grains
+            80: '🌧️',     // Slight rain showers
+            81: '⛈️',     // Moderate rain showers
+            82: '⛈️',     // Violent rain showers
+            85: '❄️',     // Slight snow showers
+            86: '❄️',     // Heavy snow showers
+            95: '⛈️',     // Thunderstorm
+            96: '⛈️',     // Thunderstorm with slight hail
+            97: '⛈️'      // Thunderstorm with heavy hail
+        };
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            searchBtnInline.addEventListener('click', searchCity);
+            searchBtnInlineMobile.addEventListener('click', searchCityMobile);
+            cityInputInline.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') searchCity();
+            });
+            cityInputInlineMobile.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') searchCityMobile();
+            });
+            themeToggleInline.addEventListener('click', toggleTheme);
+            themeToggleInlineMobile.addEventListener('click', toggleThemeMobile);
+
+            document.body.classList.add('dark-theme');
+            updateThemeToggle();
+            updateThemeToggleMobile();
+
+            loadWeather('Roma');
+            
+            checkViewportSize();
+            window.addEventListener('resize', checkViewportSize);
+        });
+
+        function checkViewportSize() {
+            const desktopLayout = document.querySelector('.daily-section > div:not(.mobile-layout)');
+            const mobileLayout = document.querySelector('.mobile-layout');
+            
+            if (window.innerWidth <= 768) {
+                desktopLayout.style.display = 'none';
+                mobileLayout.style.display = 'block';
+            } else {
+                desktopLayout.style.display = 'flex';
+                mobileLayout.style.display = 'none';
+            }
+        }
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark-theme');
+            updateThemeToggle();
+            
+            if (currentWeatherData && currentWeatherData.current) {
+                startWeatherEffect(currentWeatherData.current.weather_code);
+            }
+        }
+
+        function toggleThemeMobile() {
+            document.body.classList.toggle('dark-theme');
+            updateThemeToggleMobile();
+            
+            if (currentWeatherData && currentWeatherData.current) {
+                startWeatherEffect(currentWeatherData.current.weather_code);
+            }
+        }
+
+        function updateThemeToggle() {
+            const themeToggle = document.getElementById('themeToggleInline');
+            const isDark = document.body.classList.contains('dark-theme');
+            themeToggle.textContent = isDark ? '☀️' : '🌙';
+            themeToggle.title = isDark ? 'Passa al tema chiaro' : 'Passa al tema scuro';
+        }
+
+        function updateThemeToggleMobile() {
+            const themeToggle = document.getElementById('themeToggleInlineMobile');
+            const isDark = document.body.classList.contains('dark-theme');
+            themeToggle.textContent = isDark ? '☀️' : '🌙';
+            themeToggle.title = isDark ? 'Passa al tema chiaro' : 'Passa al tema scuro';
+        }
+
+        function searchCity() {
+            const city = cityInputInline.value.trim();
+            if (city) {
+                loadWeather(city);
+                cityInputInline.value = '';
+            }
+        }
+
+        function searchCityMobile() {
+            const city = cityInputInlineMobile.value.trim();
+            if (city) {
+                loadWeather(city);
+                cityInputInlineMobile.value = '';
+            }
+        }
+
+        function getLocalDateStr(date, tz) {
+            try {
+                return new Intl.DateTimeFormat('it-IT', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    timeZone: tz
+                }).format(date);
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function compareDateStrings(a, b) {
+            const toYMD = s => {
+                const [d, m, y] = s.split('/');
+                return `${y}${m}${d}`;
+            };
+            const A = toYMD(a), B = toYMD(b);
+            if (A < B) return -1;
+            if (A > B) return 1;
+            return 0;
+        }
+
+        function formatTime(date, tz, italyDate) {
+            try {
+                const timeStr = new Intl.DateTimeFormat('it-IT', {
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit',
+                    timeZone: tz, 
+                    hour12: false
+                }).format(date);
+                
+                if (tz !== 'Europe/Rome') {
+                    const localDate = getLocalDateStr(date, tz);
+                    if (localDate !== italyDate) {
+                        return `${timeStr} (${localDate})`;
+                    }
+                }
+                return timeStr;
+            } catch (e) {
+                return date.toLocaleTimeString('it-IT');
+            }
+        }
+
+        function formatDate(date, tz) {
+            try {
+                const opts = { 
+                    weekday: 'long', 
+                    day: 'numeric', 
+                    month: 'long', 
+                    year: 'numeric',
+                    timeZone: tz 
+                };
+                const d = new Intl.DateTimeFormat('it-IT', opts).format(date);
+                return d.charAt(0).toUpperCase() + d.slice(1);
+            } catch (e) {
+                const opts = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+                const d = new Intl.DateTimeFormat('it-IT', opts).format(date);
+                return d.charAt(0).toUpperCase() + d.slice(1);
+            }
+        }
+
+        async function loadWeather(city) {
+            try {
+                const geoResponse = await fetch(
+                    `${API_BASE}/search?name=${encodeURIComponent(city)}&count=1&language=it&format=json`
+                );
+                
+                if (!geoResponse.ok) throw new Error('Città non trovata');
+                
+                const geoData = await geoResponse.json();
+                
+                if (!geoData.results || geoData.results.length === 0) {
+                    throw new Error('Città non trovata');
+                }
+                
+                const location = geoData.results[0];
+                await loadWeatherByCoords(location.latitude, location.longitude, `${location.name}, ${location.country}`);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert("Errore: Città non trovata"); 
+            }
+        }
+
+        async function loadWeatherByCoords(lat, lon, locationName = null) {
+            try {
+                const response = await fetch(
+                    `${WEATHER_API}/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,pressure_msl,wind_direction_10m&hourly=temperature_2m,weather_code,precipitation,relative_humidity_2m,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,relative_humidity_2m_mean,wind_speed_10m_mean&timezone=auto`
+                );
+
+                if (!response.ok) throw new Error('Errore nel caricamento');
+
+                const data = await response.json();
+                currentWeatherData = data;
+                currentTimezone = data.timezone;
+                
+                if (timezoneInterval) {
+                    clearInterval(timezoneInterval);
+                }
+                
+                updateWeather(data, locationName, lat, lon);
+                updateWeatherMobile(data, locationName, lat, lon);
+                updateForecast(data);
+                
+                startTimezoneUpdate();
+                
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function startTimezoneUpdate() {
+            if (timezoneInterval) {
+                clearInterval(timezoneInterval);
+            }
+            
+            timezoneInterval = setInterval(() => {
+                if (currentTimezone) {
+                    updateCurrentTime();
+                    updateCurrentTimeMobile();
+                }
+            }, 1000);
+        }
+
+        function updateCurrentTime() {
+            if (!currentTimezone) return;
+            
+            const now = new Date();
+            const italyDate = getLocalDateStr(now, 'Europe/Rome');
+            const timeStr = formatTime(now, currentTimezone, italyDate);
+            const fullDateStr = formatDate(now, currentTimezone);
+            
+            document.getElementById('localTimeInfoInline').innerHTML = 
+                `Ora locale: ${timeStr}<br>${fullDateStr}`;
+        }
+
+        function updateCurrentTimeMobile() {
+            if (!currentTimezone) return;
+            
+            const now = new Date();
+            const italyDate = getLocalDateStr(now, 'Europe/Rome');
+            const timeStr = formatTime(now, currentTimezone, italyDate);
+            const fullDateStr = formatDate(now, currentTimezone);
+            
+            document.getElementById('localTimeInfoInlineMobile').innerHTML = 
+                `Ora locale: ${timeStr}<br>${fullDateStr}`;
+        }
+
+        function updateWeather(data, locationName, lat, lon) {
+            const current = data.current;
+            
+            document.getElementById('cityNameInline').textContent = locationName || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+            document.getElementById('weatherDescInline').textContent = getWeatherDescription(current.weather_code);
+            document.getElementById('temperatureInline').textContent = `${Math.round(current.temperature_2m)}°`;
+            
+            updateCurrentTime();
+            
+            startWeatherEffect(current.weather_code);
+        }
+
+        function updateWeatherMobile(data, locationName, lat, lon) {
+            const current = data.current;
+            
+            document.getElementById('cityNameInlineMobile').textContent = locationName || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+            document.getElementById('weatherDescInlineMobile').textContent = getWeatherDescription(current.weather_code);
+            document.getElementById('temperatureInlineMobile').textContent = `${Math.round(current.temperature_2m)}°`;
+            
+            updateCurrentTimeMobile();
+        }
+
+        function getWeatherDescription(code) {
+            const descriptions = {
+                0: 'Cielo sereno',
+                1: 'Principalmente sereno',
+                2: 'Parzialmente nuvoloso',
+                3: 'Nuvoloso',
+                45: 'Nebbioso',
+                48: 'Nebbia con brina',
+                51: 'Leggera pioggia',
+                53: 'Pioggia moderata',
+                55: 'Pioggia intensa',
+                61: 'Pioggia leggera',
+                63: 'Pioggia moderata',
+                65: 'Pioggia intensa',
+                71: 'Neve leggera',
+                73: 'Neve moderata',
+                75: 'Neve intensa',
+                77: 'Granelli di neve',
+                80: 'Pioggia leggera',
+                81: 'Pioggia moderata',
+                82: 'Pioggia violenta',
+                85: 'Neve leggera',
+                86: 'Neve intensa',
+                95: 'Temporale',
+                96: 'Temporale con grandine',
+                97: 'Temporale con grandine intensa',
+                20: 'Vento leggero',
+                21: 'Vento moderato',
+                22: 'Vento fresco',
+                23: 'Vento forte',
+                24: 'Vento molto forte',
+                25: 'Vento tempestoso',
+                26: 'Vento violento',
+                27: 'Uragano',
+                28: 'Tornado',
+                29: 'Tornado forte'
+            };
+            return descriptions[code] || 'Condizioni meteo';
+        }
+
+        function updateForecast(data) {
+            if (!currentTimezone) return;
+            
+            const now = new Date();
+            const italyDateStr = getLocalDateStr(now, 'Europe/Rome');
+            const cityDateStr = getLocalDateStr(now, currentTimezone);
+            
+            const todayStr = formatDate(now, currentTimezone);
+            document.getElementById('hourlyTitle').textContent = `__--__ Previsioni Orarie - ${todayStr} __--__`;
+            
+            hourlyForecast.innerHTML = '';
+            const hourlyTimes = data.hourly.time;
+            const hourlyTemps = data.hourly.temperature_2m;
+            const hourlyCodes = data.hourly.weather_code;
+            const hourlyHumidity = data.hourly.relative_humidity_2m;
+            const hourlyWind = data.hourly.wind_speed_10m;
+            
+            const currentHour = new Date().toLocaleTimeString('it-IT', {
+                hour: '2-digit',
+                timeZone: currentTimezone,
+                hour12: false
+            }).split(':')[0];
+            
+            for (let i = 0; i < 24; i++) {
+                const time = new Date(hourlyTimes[i]);
+                const timeStr = time.toLocaleTimeString('it-IT', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    timeZone: currentTimezone 
+                });
+                const temp = Math.round(hourlyTemps[i]);
+                const code = hourlyCodes[i];
+                const humidityValue = Math.round(hourlyHumidity[i]);
+                const windValue = Math.round(hourlyWind[i]);
+                
+                const forecastHour = time.getHours();
+                const isCurrentHour = (parseInt(currentHour) === forecastHour);
+                
+                const forecastDateStr = getLocalDateStr(time, currentTimezone);
+                const dateDiff = compareDateStrings(forecastDateStr, cityDateStr);
+                
+                const card = createForecastCard(
+                    timeStr,
+                    weatherIcons[code] || '🌤️',
+                    temp,
+                    getWeatherDescription(code),
+                    null,
+                    humidityValue,
+                    windValue,
+                    time,
+                    true,
+                    isCurrentHour,
+                    dateDiff
+                );
+                hourlyForecast.appendChild(card);
+                
+                if (isCurrentHour) {
+                    startWeatherEffect(code);
+                }
+            }
+
+            dailyForecast.innerHTML = '';
+            const dailyTimes = data.daily.time;
+            const dailyMaxTemps = data.daily.temperature_2m_max;
+            const dailyMinTemps = data.daily.temperature_2m_min;
+            const dailyCodes = data.daily.weather_code;
+            const dailyHumidity = data.daily.relative_humidity_2m_mean;
+            const dailyWind = data.daily.wind_speed_10m_mean;
+            
+            for (let i = 0; i < Math.min(7, dailyTimes.length); i++) {
+                const date = new Date(dailyTimes[i]);
+                const dayName = formatDate(date, currentTimezone);
+                const maxTemp = Math.round(dailyMaxTemps[i]);
+                const minTemp = Math.round(dailyMinTemps[i]);
+                const code = dailyCodes[i];
+                const humidityValue = Math.round(dailyHumidity[i]);
+                const windValue = Math.round(dailyWind[i]);
+                
+                const forecastDateStr = getLocalDateStr(date, currentTimezone);
+                const dateDiff = compareDateStrings(forecastDateStr, italyDateStr);
+                
+                const card = createForecastCard(
+                    dayName,
+                    weatherIcons[code] || '🌤️',
+                    maxTemp,
+                    getWeatherDescription(code),
+                    minTemp,
+                    humidityValue,
+                    windValue,
+                    date,
+                    false,
+                    false,
+                    dateDiff
+                );
+                card.dataset.dayIndex = i;
+                card.style.cursor = 'pointer';
+                card.addEventListener('click', () => selectDay(i, data));
+                dailyForecast.appendChild(card);
+            }
+        }
+
+        function selectDay(dayIndex, data) {
+            if (!currentTimezone) return;
+            
+            const dailyTimes = data.daily.time;
+            const selectedDate = new Date(dailyTimes[dayIndex]);
+            const selectedDayStr = formatDate(selectedDate, currentTimezone);
+            document.getElementById('hourlyTitle').textContent = `__--__ Previsioni Orarie - ${selectedDayStr} __--__`;
+            
+            hourlyForecast.innerHTML = '';
+            const hourlyTimes = data.hourly.time;
+            const hourlyTemps = data.hourly.temperature_2m;
+            const hourlyCodes = data.hourly.weather_code;
+            const hourlyHumidity = data.hourly.relative_humidity_2m;
+            const hourlyWind = data.hourly.wind_speed_10m;
+            
+            const startIndex = dayIndex * 24;
+            const endIndex = Math.min(startIndex + 24, hourlyTimes.length);
+            
+            const now = new Date();
+            const cityDateStr = getLocalDateStr(now, currentTimezone);
+            const currentHour = new Date().toLocaleTimeString('it-IT', {
+                hour: '2-digit',
+                timeZone: currentTimezone,
+                hour12: false
+            }).split(':')[0];
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                if (i >= hourlyTimes.length) break;
+                
+                const time = new Date(hourlyTimes[i]);
+                const timeStr = time.toLocaleTimeString('it-IT', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    timeZone: currentTimezone 
+                });
+                const temp = Math.round(hourlyTemps[i]);
+                const code = hourlyCodes[i];
+                const humidityValue = Math.round(hourlyHumidity[i]);
+                const windValue = Math.round(hourlyWind[i]);
+                
+                const forecastDateStr = getLocalDateStr(time, currentTimezone);
+                const forecastHour = time.getHours();
+                const isToday = (forecastDateStr === cityDateStr);
+                const isCurrentHour = isToday && (parseInt(currentHour) === forecastHour);
+                
+                const italyDateStr = getLocalDateStr(now, 'Europe/Rome');
+                const dateDiff = compareDateStrings(forecastDateStr, italyDateStr);
+                
+                const card = createForecastCard(
+                    timeStr,
+                    weatherIcons[code] || '🌤️',
+                    temp,
+                    getWeatherDescription(code),
+                    null,
+                    humidityValue,
+                    windValue,
+                    time,
+                    true,
+                    isCurrentHour,
+                    dateDiff
+                );
+                hourlyForecast.appendChild(card);
+                
+                if (isCurrentHour) {
+                    startWeatherEffect(code);
+                }
+            }
+            
+            document.querySelectorAll('.daily-forecast .forecast-card').forEach(card => {
+                card.style.background = '';
+                card.classList.remove('prev-day', 'next-day');
+            });
+            document.querySelector(`.daily-forecast .forecast-card[data-day-index="${dayIndex}"]`).style.background = 'rgba(255, 255, 255, 0.4)';
+        }
+
+        function createForecastCard(time, icon, temp, desc, minTemp = null, humidityValue = null, windValue = null, dateTime = null, isHourly = false, isCurrentHour = false, dateDiff = 0) {
+            const card = document.createElement('div');
+            card.className = 'forecast-card';
+            
+            if (isCurrentHour) {
+                card.classList.add('current-hour');
+            }
+            
+            if (dateDiff === -1) {
+                card.classList.add('prev-day');
+            } else if (dateDiff === 1) {
+                card.classList.add('next-day');
+            }
+            
+            let detailsHtml = '';
+            if (humidityValue !== null && windValue !== null) {
+                detailsHtml = `
+                    <div class="forecast-details">
+                        <div class="forecast-humidity">
+                            <div class="forecast-humidity-icon">💧</div>
+                            <div>${humidityValue}%</div>
+                        </div>
+                        <div class="forecast-wind">
+                            <div class="forecast-wind-icon">💨</div>
+                            <div>${windValue} km/h</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            const finalIcon = getDayNightIcon(icon, dateTime);
+            
+            let thermometerHtml = '';
+            if (minTemp !== null) {
+                thermometerHtml = `
+                    <div class="thermometer-container">
+                        <svg class="thermometer-icon" viewBox="0 0 24 24" width="28" height="28">
+                            <defs>
+                                <linearGradient id="thermometerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#ff6b6b" />
+                                    <stop offset="100%" stop-color="#c92a2a" />
+                                </linearGradient>
+                            </defs>
+                            <path fill="none" stroke="#2d3436" stroke-width="1.5" d="M12,2 C14.7614,2 17,4.23858 17,7 L17,14 C17,16.2091 15.2091,18 13,18 C10.7909,18 9,16.2091 9,14 L9,7 C9,4.23858 11.2386,2 14,2 Z" />
+                            <circle cx="13" cy="13" r="3" fill="url(#thermometerGradient)" />
+                            <path fill="#2d3436" d="M13,8 L13,13 M13,13 L13,16 M13,16 L15,18 M13,16 L11,18" />
+                            <rect x="11" y="2" width="4" height="6" rx="2" fill="#2d3436" />
+                        </svg>
+                        <div class="temperature-range">${temp}° / ${minTemp}°</div>
+                    </div>
+                `;
+            } else {
+                thermometerHtml = `<div class="forecast-temp">${temp}°</div>`;
+            }
+            
+            if (isHourly) {
+                card.innerHTML = `
+                    <div class="time-temp-row">
+                        <div class="forecast-temp">${temp}°</div>
+                        <div class="forecast-time forecast-time-bold">${time} ${isCurrentHour ? '⏰' : ''}</div>
+                    </div>
+                    <div class="forecast-icon">
+                        <svg class="svg-icon" viewBox="0 0 200 200" width="40" height="40">
+                            ${getAnimatedIconSVG(finalIcon)}
+                        </svg>
+                    </div>
+                    <div class="forecast-desc">${desc}</div>
+                    ${detailsHtml}
+                `;
+                
+                card.classList.add('hourly-card', 'compact');
+                
+                card.addEventListener('click', function() {
+                    this.classList.toggle('expanded');
+                    if (this.classList.contains('expanded')) {
+                        this.classList.remove('compact');
+                    } else {
+                        this.classList.add('compact');
+                    }
+                });
+            } else {
+                card.innerHTML = `
+                    <div class="forecast-time">${time}</div>
+                    <div class="forecast-icon">
+                        <svg class="svg-icon" viewBox="0 0 200 200" width="40" height="40">
+                            ${getAnimatedIconSVG(finalIcon)}
+                        </svg>
+                    </div>
+                    ${thermometerHtml}
+                    <div class="forecast-desc">${desc}</div>
+                    ${detailsHtml}
+                `;
+            }
+            
+            return card;
+        }
+
+        function getDayNightIcon(icon, dateTime) {
+            if (!dateTime) return icon;
+            
+            const hour = dateTime.getHours();
+            
+            if (hour >= 20 || hour < 6) {
+                const nightIcons = {
+                    '☀️': '🌙',
+                    '⛅': '☁️',
+                    '🌤️': '☁️',
+                    '⛈️': '⛈️',
+                    '❄️': '❄️',
+                    '🌧️': '🌧️'
+                };
+                
+                if (Object.keys(nightIcons).includes(icon)) {
+                    return nightIcons[icon];
+                }
+            }
+            
+            return icon;
+        }
+
+        function getAnimatedIconSVG(emoji) {
+            const iconMap = {
+                '☀️': `
+                    <defs>
+                        <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#FFD700" />
+                            <stop offset="100%" stop-color="#FFA500" />
+                        </radialGradient>
+                        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="3" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    <circle cx="100" cy="100" r="45" fill="url(#sunGrad)" filter="url(#glow)" />
+                    <g class="ray" animation="spin" dur="10s">
+                        <line x1="100" y1="25" x2="100" y2="5" stroke="#FFD700" stroke-width="5" />
+                        <line x1="100" y1="175" x2="100" y2="195" stroke="#FFD700" stroke-width="5" />
+                        <line x1="25" y1="100" x2="5" y2="100" stroke="#FFD700" stroke-width="5" />
+                        <line x1="175" y1="100" x2="195" y2="100" stroke="#FFD700" stroke-width="5" />
+                        <line x1="45" y1="45" x2="30" y2="30" stroke="#FFD700" stroke-width="5" />
+                        <line x1="155" y1="155" x2="170" y2="170" stroke="#FFD700" stroke-width="5" />
+                        <line x1="155" y1="45" x2="170" y2="30" stroke="#FFD700" stroke-width="5" />
+                        <line x1="45" y1="155" x2="30" y2="170" stroke="#FFD700" stroke-width="5" />
+                    </g>
+                `,
+                '🌙': `
+                    <defs>
+                        <radialGradient id="moonGrad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#F0E68C" />
+                            <stop offset="100%" stop-color="#BDB76B" />
+                        </radialGradient>
+                        <filter id="moonGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="4" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    <circle cx="100" cy="100" r="40" fill="url(#moonGrad)" filter="url(#moonGlow)" />
+                    <circle cx="115" cy="90" r="35" fill="rgba(26, 32, 44, 0.9)" />
+                `,
+                '⛅': `
+                    <defs>
+                        <radialGradient id="sunGrad2" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#FFD700" />
+                            <stop offset="100%" stop-color="#FFA500" />
+                        </radialGradient>
+                        <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="white" stop-opacity="0.95" />
+                            <stop offset="100%" stop-color="#f0f0f0" stop-opacity="0.9" />
+                        </linearGradient>
+                    </defs>
+                    <circle cx="100" cy="100" r="35" fill="url(#sunGrad2)" />
+                    <ellipse cx="120" cy="120" rx="45" ry="28" fill="url(#cloudGrad)" />
+                    <ellipse cx="90" cy="115" rx="38" ry="22" fill="url(#cloudGrad)" />
+                `,
+                '☁️': `
+                    <defs>
+                        <linearGradient id="cloudGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="white" stop-opacity="0.95" />
+                            <stop offset="100%" stop-color="#e6e6e6" stop-opacity="0.9" />
+                        </linearGradient>
+                        <filter id="cloudShadow" x="-10%" y="-10%" width="120%" height="120%">
+                            <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+                            <feOffset dx="2" dy="2" result="offsetblur"/>
+                            <feComponentTransfer>
+                                <feFuncA type="linear" slope="0.2"/>
+                            </feComponentTransfer>
+                            <feMerge> 
+                                <feMergeNode/>
+                                <feMergeNode in="SourceGraphic"/> 
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <ellipse cx="100" cy="100" rx="50" ry="28" fill="url(#cloudGrad2)" filter="url(#cloudShadow)" />
+                    <ellipse cx="70" cy="95" rx="38" ry="22" fill="url(#cloudGrad2)" filter="url(#cloudShadow)" />
+                    <ellipse cx="130" cy="95" rx="38" ry="22" fill="url(#cloudGrad2)" filter="url(#cloudShadow)" />
+                    <ellipse cx="100" cy="110" rx="42" ry="20" fill="url(#cloudGrad2)" filter="url(#cloudShadow)" />
+                `,
+                '🌧️': `
+                    <defs>
+                        <linearGradient id="cloudGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#B0C4DE" stop-opacity="0.9" />
+                            <stop offset="100%" stop-color="#778899" stop-opacity="0.8)
+                        </linearGradient>
+                        <filter id="rainShadow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur in="SourceAlpha" stdDeviation="1"/>
+                            <feOffset dx="1" dy="1" result="offsetblur"/>
+                            <feComponentTransfer>
+                                <feFuncA type="linear" slope="0.3"/>
+                            </feComponentTransfer>
+                            <feMerge> 
+                                <feMergeNode/>
+                                <feMergeNode in="SourceGraphic"/> 
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <ellipse cx="100" cy="90" rx="50" ry="28" fill="url(#cloudGrad3)" />
+                    <ellipse cx="70" cy="85" rx="38" ry="22" fill="url(#cloudGrad3)" />
+                    <ellipse cx="130" cy="85" rx="38" ry="22" fill="url(#cloudGrad3)" />
+                    <g class="rain">
+                        <line x1="80" y1="110" x2="75" y2="135" stroke="#4682B4" stroke-width="4" filter="url(#rainShadow)" />
+                        <line x1="100" y1="115" x2="95" y2="140" stroke="#4682B4" stroke-width="4" filter="url(#rainShadow)" />
+                        <line x1="120" y1="110" x2="115" y2="135" stroke="#4682B4" stroke-width="4" filter="url(#rainShadow)" />
+                        <line x1="90" y1="125" x2="85" y2="150" stroke="#4682B4" stroke-width="4" filter="url(#rainShadow)" />
+                        <line x1="110" y1="125" x2="105" y2="150" stroke="#4682B4" stroke-width="4" filter="url(#rainShadow)" />
+                        <line x1="70" y1="120" x2="65" y2="145" stroke="#4682B4" stroke-width="4" filter="url(#rainShadow)" />
+                        <line x1="130" y1="120" x2="125" y2="145" stroke="#4682B4" stroke-width="4" filter="url(#rainShadow)" />
+                    </g>
+                `,
+                '❄️': `
+                    <defs>
+                        <linearGradient id="snowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#E6E6FA" />
+                            <stop offset="100%" stop-color="#B0E0E6" />
+                        </linearGradient>
+                        <filter id="snowGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="2" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    <circle cx="100" cy="100" r="6" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <path d="M100 75 L100 125 M75 100 L125 100 M82 82 L118 118 M118 82 L82 118" stroke="url(#snowGrad)" stroke-width="4" filter="url(#snowGlow)" />
+                    <circle cx="85" cy="85" r="4" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <circle cx="115" cy="85" r="4" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <circle cx="85" cy="115" r="4" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <circle cx="115" cy="115" r="4" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <circle cx="100" cy="70" r="3" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <circle cx="100" cy="130" r="3" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <circle cx="70" cy="100" r="3" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                    <circle cx="130" cy="100" r="3" fill="url(#snowGrad)" filter="url(#snowGlow)" />
+                `,
+                '⛈️': `
+                    <defs>
+                        <linearGradient id="stormCloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#4B4B4B" stop-opacity="0.9" />
+                            <stop offset="100%" stop-color="#2F2F2F" stop-opacity="0.8" />
+                        </linearGradient>
+                        <filter id="lightningGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="2" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    <ellipse cx="100" cy="90" rx="50" ry="28" fill="url(#stormCloudGrad)" />
+                    <ellipse cx="70" cy="85" rx="38" ry="22" fill="url(#stormCloudGrad)" />
+                    <ellipse cx="130" cy="85" rx="38" ry="22" fill="url(#stormCloudGrad)" />
+                    <path class="lightning" d="M90 120 L95 135 L92 135 L97 150" stroke="#FFD700" stroke-width="4" fill="none" filter="url(#lightningGlow)" />
+                `,
+                '🌫️': `
+                    <defs>
+                        <linearGradient id="fogGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="white" stop-opacity="0.7" />
+                            <stop offset="100%" stop-color="#E0E0E0" stop-opacity="0.5" />
+                        </linearGradient>
+                        <filter id="fogBlur">
+                            <feGaussianBlur stdDeviation="5"/>
+                        </filter>
+                    </defs>
+                    <rect x="40" y="75" width="120" height="50" fill="url(#fogGrad)" filter="url(#fogBlur)" rx="25" />
+                    <rect x="50" y="85" width="100" height="40" fill="url(#fogGrad)" filter="url(#fogBlur)" rx="20" />
+                    <rect x="60" y="95" width="80" height="30" fill="url(#fogGrad)" filter="url(#fogBlur)" rx="15" />
+                    <rect x="70" y="105" width="60" height="20" fill="url(#fogGrad)" filter="url(#fogBlur)" rx="10" />
+                `,
+                '🪁': `
+                    <defs>
+                        <linearGradient id="kiteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#FF6B6B" />
+                            <stop offset="100%" stop-color="#4ECDC4" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M100 50 L150 100 L100 150 L50 100 Z" fill="url(#kiteGrad)" />
+                    <line x1="100" y1="50" x2="100" y2="150" stroke="white" stroke-width="2" />
+                    <line x1="50" y1="100" x2="150" y2="100" stroke="white" stroke-width="2" />
+                    <circle cx="100" cy="80" r="3" fill="white" />
+                    <path d="M100 150 Q 120 170 140 180" stroke="#FF6B6B" stroke-width="2" fill="none" />
+                    <path d="M100 150 Q 80 170 60 180" stroke="#4ECDC4" stroke-width="2" fill="none" />
+                `
+            };
+            
+            return iconMap[emoji] || iconMap['☁️'];
+        }
+    </script>
+</body>
+</html>
